@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plan de Trading Interactivo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f8f9fa;
+            color: #1e293b;
+        }
+
+        .sheet-container {
+            max-width: 1400px;
+            margin: 20px auto;
+            background: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            overflow-x: auto;
+        }
+
+        /* Excel-like Table Styles */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+            font-size: 0.9rem;
+        }
+
+        th,
+        td {
+            border: 1px solid #cbd5e1;
+            padding: 8px 12px;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        /* Column Widths */
+        .col-metric {
+            width: 15%;
+            text-align: left;
+        }
+
+        .col-value {
+            width: 10%;
+        }
+
+        .col-reason {
+            width: 25%;
+            text-align: left;
+        }
+
+        .col-indicator {
+            width: 5%;
+            font-weight: bold;
+        }
+
+        .col-risk {
+            width: 10%;
+        }
+
+        .col-wins {
+            width: 15%;
+        }
+
+        .col-percent {
+            width: 10%;
+        }
+
+        .col-result {
+            width: 10%;
+        }
+
+        /* Header Colors */
+        .header-metric {
+            background-color: #fce8e6;
+            font-weight: bold;
+        }
+
+        /* Light Red */
+        .header-value {
+            background-color: #dcfce7;
+            font-weight: bold;
+        }
+
+        /* Light Green */
+        .header-reason {
+            background-color: #ffffff;
+            font-weight: bold;
+        }
+
+        /* White */
+        .header-calc {
+            background-color: #ffedd5;
+            font-weight: bold;
+        }
+
+        /* Light Orange */
+
+        /* Row Styles */
+        .row-total {
+            background-color: #f1f5f9;
+            font-weight: bold;
+            border-top: 2px solid #94a3b8;
+        }
+
+        /* Status Colors */
+        .status-success {
+            background-color: #dcfce7;
+            color: #166534;
+            font-weight: bold;
+        }
+
+        .status-failure {
+            background-color: #fee2e2;
+            color: #991b1b;
+            font-weight: bold;
+        }
+
+        /* Controls */
+        .control-panel {
+            background-color: #1e293b;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        select {
+            background-color: #334155;
+            color: white;
+            border: 1px solid #475569;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #94a3b8;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="sheet-container">
+
+        <!-- CONTROL PANEL -->
+        <div class="control-panel">
+            <h1 class="text-xl font-bold mr-4">Configuración del Plan</h1>
+
+            <div class="flex items-center gap-2">
+                <label for="trades-select" class="text-sm text-slate-300">Operaciones Mensuales:</label>
+                <select id="trades-select" onchange="updateState('trades', this.value)">
+                    <option value="15">15 Trades</option>
+                    <option value="20">20 Trades</option>
+                </select>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <label for="risk-select" class="text-sm text-slate-300">Riesgo por Trade:</label>
+                <select id="risk-select" onchange="updateState('risk', this.value)">
+                    <option value="all">Ver Todos</option>
+                    <option value="0.5">0.5%</option>
+                    <option value="0.75">0.75%</option>
+                    <option value="1">1.0%</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- DYNAMIC CONTENT -->
+        <div id="app"></div>
+
+    </div>
+
+    <script>
+        // --- STATE ---
+        const state = {
+            trades: 15,
+            risk: 'all' // 'all', '0.5', '0.75', '1'
+        };
+
+        // --- DATA & LOGIC ---
+        const scenarios = [
+            {
+                winRate: 0.40,
+                title: "Escenario 1: Tasa de Acierto 40%",
+                reason: "Es todo lo que necesitas para ser un trader consistente."
+            },
+            {
+                winRate: 0.50,
+                title: "Escenario 2: Tasa de Acierto 50%",
+                reason: "Lo mismo que lanzar una moneda."
+            },
+            {
+                winRate: 0.60,
+                title: "Escenario 3: Tasa de Acierto 60%",
+                reason: "Lo ideal."
+            }
+        ];
+
+        const risks = [0.5, 0.75, 1.0];
+
+        function calculate(winRate, totalTrades, riskPerTrade) {
+            const wins = totalTrades * winRate;
+            const losses = totalTrades - wins;
+
+            // 1:3 RR => Win = 3R, Loss = 1R
+            const winPercent = wins * (riskPerTrade * 3);
+            const lossPercent = losses * riskPerTrade;
+            const netResult = winPercent - lossPercent;
+
+            return {
+                wins,
+                losses,
+                winPercent,
+                lossPercent,
+                netResult,
+                passed: netResult >= 5 // Target is 5%
+            };
+        }
+
+        // --- RENDERING ---
+        function updateState(key, value) {
+            state[key] = key === 'trades' ? parseInt(value) : value;
+            render();
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            let html = '';
+
+            scenarios.forEach(scenario => {
+                html += renderScenarioTable(scenario);
+            });
+
+            app.innerHTML = html;
+        }
+
+        function renderScenarioTable(scenario) {
+            const winRateDisplay = (scenario.winRate * 100).toFixed(0) + '%';
+
+            // Filter risks based on selection
+            const activeRisks = state.risk === 'all'
+                ? risks
+                : risks.filter(r => r.toString() === state.risk);
+
+            let rowsHtml = '';
+
+            activeRisks.forEach((risk, index) => {
+                const calc = calculate(scenario.winRate, state.trades, risk);
+                const isFirst = index === 0; // Only show left headers for the first block if showing all
+
+                // If filtering specific risk, always show headers? 
+                // Actually, to match the screenshot, the left side is one big merged block usually.
+                // But for simplicity and interactivity, we'll render the left side for the first visible block 
+                // and empty cells for subsequent ones, OR just repeat them if the user filters.
+                // Let's stick to the screenshot look: Left side only appears once per table.
+
+                const showLeft = isFirst;
+
+                // Block Rows
+                // Row 1: Wins
+                rowsHtml += `
+                    <tr>
+                        ${showLeft ? `
+                            <td class="col-metric">Ratio R:R Promedio</td>
+                            <td class="col-value bg-slate-50 font-bold">1:3</td>
+                            <td class="col-reason">El mínimo aceptable en SMC para validar una ineficiencia.</td>
+                        ` : `
+                            <td colspan="3" rowspan="3" style="border:none; border-right: 1px solid #cbd5e1;"></td>
+                        `}
+                        
+                        <td class="col-indicator">"+"</td>
+                        <td class="col-risk">${(risk * 3).toFixed(2)}</td> <!-- Reward % -->
+                        <td class="col-wins">${calc.wins}</td>
+                        <td class="col-percent">${calc.winPercent.toFixed(2)}</td>
+                        <td class="col-result" rowspan="3"></td>
+                    </tr>
+                `;
+
+                // Row 2: Losses
+                rowsHtml += `
+                    <tr>
+                        ${showLeft ? `
+                            <td class="col-metric">Operaciones Mensuales</td>
+                            <td class="col-value bg-slate-50 font-bold">${state.trades}</td>
+                            <td class="col-reason">75% de las operaciones que busco al mes.</td>
+                        ` : ``}
+                        
+                        <td class="col-indicator">"-"</td>
+                        <td class="col-risk">${risk}</td> <!-- Risk % -->
+                        <td class="col-wins">${calc.losses}</td>
+                        <td class="col-percent">${calc.lossPercent.toFixed(2)}</td>
+                    </tr>
+                `;
+
+                // Row 3: Totals
+                rowsHtml += `
+                    <tr class="row-total">
+                        ${showLeft ? `
+                            <td class="col-metric">Tasa de Acierto Requerida</td>
+                            <td class="col-value bg-slate-50 font-bold">${winRateDisplay}</td>
+                            <td class="col-reason">${scenario.reason}</td>
+                        ` : ``}
+                        
+                        <td colspan="2" class="text-right pr-4">Totales por ciclo</td>
+                        <td class="col-wins font-bold">${(calc.wins - calc.losses)}</td> <!-- Net Trades (not really useful but in screenshot it says -3 or similar) -->
+                                                                                        <!-- Wait, screenshot shows "Totales por ciclo" then "-3" under Operaciones Ganadas? 
+                                                                                             Ah, 6 wins - 9 losses = -3. Correct. -->
+                        <td class="col-percent font-bold ${calc.netResult >= 0 ? 'text-green-700' : 'text-red-700'}">${calc.netResult.toFixed(2)}</td>
+                        <td class="col-result ${calc.passed ? 'status-success' : 'status-failure'}">
+                            ${calc.passed ? '✓' : 'X'}
+                        </td>
+                    </tr>
+                `;
+
+                // Spacer row if not last
+                if (index < activeRisks.length - 1) {
+                    rowsHtml += `<tr><td colspan="8" style="height: 10px; border: none;"></td></tr>`;
+                }
+            });
+
+            return `
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="header-metric">Métrica de Gestión</th>
+                            <th class="header-value">Valor Objetivo (SMC)</th>
+                            <th class="header-reason">Razón</th>
+                            <th class="header-calc">Indicator</th>
+                            <th class="header-calc">% Por Trade</th>
+                            <th class="header-calc">Operaciones Ganadas</th>
+                            <th class="header-calc">Porcentaje</th>
+                            <th class="header-calc">Resultado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // Initialize
+        render();
+
+    </script>
+</body>
+
+</html>
